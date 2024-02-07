@@ -1,7 +1,6 @@
 # Enterprise Data Science and ML in Production - INSY 695 - Group Project
 
 ## Team Members
-
 - Arnav Gupta
 - Freddy Chen
 - Jatin Suri
