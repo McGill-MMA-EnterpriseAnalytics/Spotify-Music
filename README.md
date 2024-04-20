@@ -88,6 +88,29 @@ Project Organization
     └── tox.ini            <- tox file with settings for running tox; see tox.readthedocs.io
 
 
+Getting Started
 --------
+To get started with the project, you can set up a virtual environment.
+
+Create a virtual environment in your project directory using the following command:
+```
+python -m venv env
+```
+
+Activate the virtual environment using the following command:
+```
+source env/bin/activate
+```
+
+use the following command to install the required packages:
+```
+poetry install
+```
+If you don't have poetry installed, you can install it using the following command:
+```
+pip install poetry
+```
+
+
 
 <p><small>Project based on the <a target="_blank" href="https://drivendata.github.io/cookiecutter-data-science/">cookiecutter data science project template</a>. #cookiecutterdatascience</small></p>
