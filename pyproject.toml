@@ -1,6 +1,8 @@
 [build-system]
 requires = ["setuptools", "wheel"]
 build-backend = "setuptools.build_meta"
+# requires = ["poetry-core"]
+# build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 name = "spotify-music"
@@ -10,7 +12,7 @@ authors = ["Your Name <you@example.com>"]
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = "^3.8"
+python = ">=3.9,<3.12"
 click = "*"
 Sphinx = "*"
 coverage = "*"
@@ -30,9 +32,6 @@ seaborn = "0.13.2"
 shap = "0.44.1"
 xgboost = "2.0.3"
 
-[build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
 
 [tool.poetry.dev-dependencies]
 # Add your development dependencies here
