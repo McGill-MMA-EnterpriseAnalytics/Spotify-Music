@@ -111,6 +111,10 @@ If you don't have poetry installed, you can install it using the following comma
 pip install poetry
 ```
 
+To run mlflow, use the following command to start a local mlflow server:
+```
+mlflow server --host 127.0.0.1 --port 5000
+```
 
 
 <p><small>Project based on the <a target="_blank" href="https://drivendata.github.io/cookiecutter-data-science/">cookiecutter data science project template</a>. #cookiecutterdatascience</small></p>
