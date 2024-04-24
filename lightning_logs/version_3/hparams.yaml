@@ -1,0 +1,7 @@
+activation: relu
+dropout_rate: 0.4987572893340163
+hidden_size: 192
+input_size: 54
+lr: 0.0016667032659038567
+num_classes: 4
+num_hidden_layers: 3

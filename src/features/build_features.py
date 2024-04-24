@@ -1,28 +1,48 @@
-import pickle
+import joblib
 import unittest
 import warnings
 
 import numpy as np
 import pandas as pd
 
-# from lightgbm import LGBMClassifier
-from rich import print
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.compose import ColumnTransformer
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import (
-    FunctionTransformer,
     OneHotEncoder,
     OrdinalEncoder,
     StandardScaler,
 )
 
+import logging
+
 pd.set_option("display.max_columns", None)
 warnings.filterwarnings("ignore")
 
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("preprocessing")
 
-path = "./data/raw/spotify_songs_train.csv"
+
+def filter_valid_dates(X):
+    """
+    Filters out rows with invalid or null dates in the 'track_album_release_date' column.
+
+    Args:
+        X (pandas.DataFrame): The input DataFrame.
+
+    Returns:
+        pandas.DataFrame: The filtered DataFrame containing only valid dates.
+    """
+    X["track_album_release_date"] = pd.to_datetime(
+        X["track_album_release_date"], errors="coerce"
+    )
+    valid_dates_mask = (
+        X["track_album_release_date"].notna()
+        & X["track_album_release_date"].dt.month.notnull()
+        & X["track_album_release_date"].dt.day.notnull()
+    )
+    return X[valid_dates_mask]
 
 
 def prepare_data(
@@ -31,32 +51,25 @@ def prepare_data(
     target="track_popularity",
     test_size=0.2,
 ):
+    data = filter_valid_dates(data)  # Filter out invalid dates
+
     data[date_column] = pd.to_datetime(data[date_column], errors="coerce")
-    not_null_mask = (
-        data[date_column].dt.month.notnull() & data[date_column].dt.day.notnull()
-    )
-    data = data[not_null_mask]
-    data = data.dropna()
+
+    data.dropna(inplace=True)
+
     X = data.drop(columns=[target])
-    y = (data[target] > 50).astype(int)
+    y = pd.cut(
+        data[target], bins=[-1, 20, 50, 80, 101], labels=[0, 1, 2, 3], right=False
+    )
+
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=test_size, random_state=42
     )
+
     return X_train, X_test, y_train, y_test
 
 
-data = pd.read_csv(path)
-X_train, X_test, y_train, y_test = prepare_data(data)
-
-
-print(f"Training set size: {X_train.shape[0]}")
-print(f"Test set size: {X_test.shape[0]}")
-
-
-# ## Feature engineering
-#
-
-
+### Feature engineering
 class TopArtistTransformer(BaseEstimator, TransformerMixin):
     def __init__(self, num_top_artists=10):
         self.num_top_artists = num_top_artists
@@ -96,100 +109,87 @@ class TopArtistTransformer(BaseEstimator, TransformerMixin):
         return ["is_top_artist"]
 
 
-# def get_num_playlists(X):
-#     num_playlist = X.groupby("track_id")["playlist_id"].transform("nunique").values
+class ReleaseDateTransformer(BaseEstimator, TransformerMixin):
+    def __init__(self):
+        pass
 
-#     return np.column_stack([num_playlist])
+    def fit(self, X, y=None):
+        return self
 
+    def transform(self, X):
+        X = pd.to_datetime(X, errors="coerce")
 
-# def playlist_name(X, feature_names):
-#     return ["num_playlists"]
+        month = X.dt.month
+        day = X.dt.day
 
+        month_season = month.map(
+            {
+                1: "Winter",
+                2: "Winter",
+                3: "Spring",
+                4: "Spring",
+                5: "Spring",
+                6: "Summer",
+                7: "Summer",
+                8: "Summer",
+                9: "Fall",
+                10: "Fall",
+                11: "Fall",
+                12: "Winter",
+            }
+        )
 
-def release_date(X):
-    X = pd.to_datetime(X, errors="coerce")
+        day_category = pd.cut(
+            day,
+            bins=[0, 10, 20, 31],
+            labels=["First 10", "Middle 10", "Last 10"],
+            right=False,
+        )
 
-    month = X.dt.month
-    day = X.dt.day
+        return np.column_stack([month_season, day_category])
 
-    month_season = month.map(
-        {
-            1: "Winter",
-            2: "Winter",
-            3: "Spring",
-            4: "Spring",
-            5: "Spring",
-            6: "Summer",
-            7: "Summer",
-            8: "Summer",
-            9: "Fall",
-            10: "Fall",
-            11: "Fall",
-            12: "Winter",
-        }
-    )
-
-    day_category = pd.cut(
-        day,
-        bins=[0, 10, 20, 31],
-        labels=["First 10", "Middle 10", "Last 10"],
-        right=False,
-    )
-
-    return np.column_stack([month_season, day_category])
-
-
-def release_date_name(X, feature_names):
-    return ["month_season", "day_category"]
+    def get_feature_names_out(self, input_features=None):
+        return ["month_season", "day_category"]
 
 
-def get_is_remix_or_collab(X):
-    is_remix = X.str.contains("remix", case=False).astype(int)
-    is_collab = X.str.contains(r"(feat|ft\.|\(with)", case=False).astype(int)
-    return np.column_stack([is_remix, is_collab])
+class RemixOrCollabTransformer(BaseEstimator, TransformerMixin):
+    def fit(self, X, y=None):
+        return self
+
+    def transform(self, X):
+        is_remix = X.str.contains("remix", case=False).astype(int)
+        is_collab = X.str.contains(r"(feat|ft\.|\(with)", case=False).astype(int)
+        return np.column_stack([is_remix, is_collab])
+
+    def get_feature_names_out(self, input_features=None):
+        return ["is_remix", "is_collab"]
 
 
-def is_remix_or_collab_name(X, feature_names):
-    return ["is_remix", "is_collab"]
+class WeekendTransformer(BaseEstimator, TransformerMixin):
+    def fit(self, X, y=None):
+        return self
 
+    def transform(self, X):
+        X = X.dropna()
+        X = pd.to_datetime(X, errors="coerce")
+        return X.dt.dayofweek.isin([5, 6]).astype(int).values.reshape(-1, 1)
 
-def get_is_weekend(X):
-    X = pd.to_datetime(X, errors="coerce")
-    return X.dt.dayofweek.isin([5, 6]).astype(int).values.reshape(-1, 1)
+    def get_feature_names_out(self, input_features=None):
+        return ["is_weekend"]
 
-
-def is_weekend_name(X, feature_names):
-    return ["is_weekend"]
-
-
-# num_playlist_pipeline = make_pipeline(
-#     FunctionTransformer(
-#         get_num_playlists,
-#         validate=False,
-#         feature_names_out=playlist_name,
-#     ),
-#     StandardScaler(),
-# )
 
 release_date_pipeline = make_pipeline(
-    FunctionTransformer(
-        release_date, validate=False, feature_names_out=release_date_name
-    ),
+    ReleaseDateTransformer(),
     OneHotEncoder(handle_unknown="ignore"),
 )
+
 
 num_pipeline = make_pipeline(
     StandardScaler(),
 )
 
-
 feature_engineering = ColumnTransformer(
     [
-        # (
-        #     "num_playlists",
-        #     num_playlist_pipeline,
-        #     ["track_id", "playlist_id"],
-        # ),
         (
             "release_date",
             release_date_pipeline,
@@ -197,9 +197,7 @@ feature_engineering = ColumnTransformer(
         ),
         (
             "release_day",
-            FunctionTransformer(
-                get_is_weekend, validate=False, feature_names_out=is_weekend_name
-            ),
+            WeekendTransformer(),
             "track_album_release_date",
         ),
         (
@@ -218,11 +216,7 @@ feature_engineering = ColumnTransformer(
         ),
         (
             "track_name",
-            FunctionTransformer(
-                get_is_remix_or_collab,
-                validate=False,
-                feature_names_out=is_remix_or_collab_name,
-            ),
+            RemixOrCollabTransformer(),
             "track_name",
         ),
         (
@@ -247,22 +241,65 @@ feature_engineering = ColumnTransformer(
             ["key"],
         ),
         ("mode", "passthrough", ["mode"]),
+        ("drop", "drop", "track_album_release_date"),
     ],
     remainder="drop",
 )
 
+final_pipeline = make_pipeline(feature_engineering)
 
-feature_engineering.fit(X_train)
-with open("./src/features/feature_engineering.pkl", "wb") as f:
-    pickle.dump(feature_engineering, f)
 
-with open("./src/features/train_test_data.pkl", "wb") as f:
-    pickle.dump((X_train, X_test, y_train, y_test), f)
+## Causal Infernece Pipeline
+
+
+class CausalInferenceTransformer(BaseEstimator, TransformerMixin):
+    def __init__(self):
+        pass
+
+    def fit(self, X, y=None):
+        return self
+
+    def transform(self, X):
+        # Remove duplicate tracks
+        X = (
+            X.sort_values("track_popularity", ascending=False)
+            .drop_duplicates("track_name")
+            .sort_index()
+        )
+
+        # Filter positive popularity
+        X = X[X["track_popularity"] > 0]
+
+        # Convert duration to mins
+        X["duration_mins"] = X["duration_ms"] / 60000
+        X["duration_mins"] = X["duration_mins"].round(2)
+        X = X.drop(columns=["duration_ms"])
+
+        # Extract release year
+        X["track_album_release_date"] = pd.to_datetime(
+            X["track_album_release_date"], errors="coerce"
+        )
+        X["release_year"] = X["track_album_release_date"].dt.year
+
+        # Drop unwanted columns
+        X = X.drop(
+            columns=[
+                "track_id",
+                "track_name",
+                "track_album_id",
+                "track_album_name",
+                "track_album_release_date",
+                "playlist_name",
+                "playlist_id",
+            ]
+        )
+        return X
+
+    def get_feature_names_out(self, input_features=None):
+        return ["duration_mins", "release_year"]
 
 
 # ### Unit Test
-
-
 class TestTopArtistTransformer(unittest.TestCase):
     def setUp(self):
         # Sample data
@@ -301,60 +338,37 @@ class TestTopArtistTransformer(unittest.TestCase):
         self.assertEqual(output_names, ["is_top_artist"])
 
 
-suite = unittest.TestLoader().loadTestsFromTestCase(TestTopArtistTransformer)
-unittest.TextTestRunner().run(suite)
+if __name__ == "__main__":
+    suite = unittest.TestLoader().loadTestsFromTestCase(TestTopArtistTransformer)
+    unittest.TextTestRunner().run(suite)
 
+    logger.info("Running train-test split...")
 
-## Causal Infernece Pipeline
+    # Load your data
+    data = pd.read_csv("./data/raw/spotify_songs_train.csv")
 
+    # Split the data into train and test sets
+    X_train, X_test, y_train, y_test = prepare_data(data)
 
-def remove_duplicate_tracks(df):
-    return (
-        df.sort_values("track_popularity", ascending=False)
-        .drop_duplicates("track_name")
-        .sort_index()
+    logger.info(f"Shape: {X_train.shape}")
+    logger.info(f"Columns: {X_train.columns}")
+
+    # Save the train and test data as a joblib file
+    with open("./src/features/train_test_data.joblib", "wb") as f:
+        joblib.dump((X_train, X_test, y_train, y_test), f)
+
+    logger.info("Train-test executed completed successfully")
+
+    final_pipeline.fit(X_train)
+
+    with open("./src/features/preprocessing.joblib", "wb") as f:
+        joblib.dump(final_pipeline, f)
+
+    logger.info("Preprocessing pipeline saved successfully")
+
+    causal_inference_pipeline = make_pipeline(
+        CausalInferenceTransformer(),
     )
 
-
-def filter_positive_popularity(df):
-    return df[df["track_popularity"] > 0]
-
-
-def convert_duration_to_mins(df):
-    df["duration_mins"] = df["duration_ms"] / 60000
-    df["duration_mins"] = df["duration_mins"].round(2)
-    return df.drop(columns=["duration_ms"])
-
-
-def extract_release_year(df):
-    df["track_album_release_date"] = pd.to_datetime(
-        df["track_album_release_date"], errors="coerce"
-    )
-    df["release_year"] = df["track_album_release_date"].dt.year
-    return df
-
-
-def drop_unwanted_columns(df):
-    return df.drop(
-        columns=[
-            "track_id",
-            "track_name",
-            "track_album_id",
-            "track_album_name",
-            "track_album_release_date",
-            "playlist_name",
-            "playlist_id",
-        ]
-    )
-
-
-causal_inference_pipeline = make_pipeline(
-    FunctionTransformer(remove_duplicate_tracks, validate=False),
-    FunctionTransformer(filter_positive_popularity, validate=False),
-    FunctionTransformer(convert_duration_to_mins, validate=False),
-    FunctionTransformer(extract_release_year, validate=False),
-    FunctionTransformer(drop_unwanted_columns, validate=False),
-)
-
-with open("./src/features/causal_inference_pipeline.pkl", "wb") as file:
-    pickle.dump(causal_inference_pipeline, file)
+    with open("./src/features/causal_inference_pipeline.joblib", "wb") as file:
+        joblib.dump(causal_inference_pipeline, file)
