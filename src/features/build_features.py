@@ -59,7 +59,7 @@ def prepare_data(
 
     X = data.drop(columns=[target])
     y = pd.cut(
-        data[target], bins=[-1, 20, 50, 80, 101], labels=[1, 2, 3, 4], right=False
+        data[target], bins=[-1, 20, 50, 80, 101], labels=[0, 1, 2, 3], right=False
     )
 
     X_train, X_test, y_train, y_test = train_test_split(
