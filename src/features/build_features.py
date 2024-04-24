@@ -22,39 +22,50 @@ pd.set_option("display.max_columns", None)
 warnings.filterwarnings("ignore")
 
 
-path = "./data/raw/spotify_songs_train.csv"
+def filter_valid_dates(X):
+    """
+    Filters out rows with invalid or null dates in the 'track_album_release_date' column.
+    
+    Args:
+        X (pandas.DataFrame): The input DataFrame.
+        
+    Returns:
+        pandas.DataFrame: The filtered DataFrame containing only valid dates.
+    """
+    X['track_album_release_date'] = pd.to_datetime(X['track_album_release_date'], errors='coerce')
+    valid_dates_mask = X['track_album_release_date'].notna() & \
+                       X['track_album_release_date'].dt.month.notnull() & \
+                       X['track_album_release_date'].dt.day.notnull()
+    return X[valid_dates_mask]
 
 
-def prepare_data(
-    data,
-    date_column="track_album_release_date",
-    target="track_popularity",
-    test_size=0.2,
-):
-    data[date_column] = pd.to_datetime(data[date_column], errors="coerce")
-    not_null_mask = (
-        data[date_column].dt.month.notnull() & data[date_column].dt.day.notnull()
-    )
-    data = data[not_null_mask]
-    data = data.dropna()
+def prepare_data(data, date_column='track_album_release_date', target='track_popularity', test_size=0.2):
+    data = filter_valid_dates(data)  # Filter out invalid dates
+    data[date_column] = pd.to_datetime(data[date_column], errors='coerce')
+    data.dropna(inplace=True)
     X = data.drop(columns=[target])
-    y = (data[target] > 50).astype(int)
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=test_size, random_state=42
-    )
+    y = pd.cut(data[target], bins=[-1, 20, 50, 80, 101], labels=[1, 2, 3, 4], right=False)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=42)
     return X_train, X_test, y_train, y_test
 
-
-data = pd.read_csv(path)
+# Load your data
+data = pd.read_csv("data/raw/spotify_songs_train.csv")
+# Split the data into train and test sets
 X_train, X_test, y_train, y_test = prepare_data(data)
 
 
-print(f"Training set size: {X_train.shape[0]}")
-print(f"Test set size: {X_test.shape[0]}")
-
-
+print(X_train.shape)
+print(X_train.columns)
+# Save the train and test data as a pickle file
+with open("train_test_data.pkl", "wb") as f:
+    pickle.dump((X_train, X_test, y_train, y_test), f)
 # ## Feature engineering
 #
+def convert_and_filter_dates(X):
+    X = pd.to_datetime(X, errors="coerce")
+    return X
+
+date_transformer = FunctionTransformer(convert_and_filter_dates, validate=False)
 
 
 class TopArtistTransformer(BaseEstimator, TransformerMixin):
@@ -105,6 +116,33 @@ class TopArtistTransformer(BaseEstimator, TransformerMixin):
 # def playlist_name(X, feature_names):
 #     return ["num_playlists"]
 
+# def convert_to_datetime(data, date_column):
+#     print("hello1")
+#     print(data[date_column])
+#     data[date_column] = pd.to_datetime(data[date_column], errors="coerce")
+#     print("hello2")
+    
+#     return data
+
+# def filter_null_dates(data, date_column):
+    
+#     print("hello3")
+#     not_null_mask = (data[date_column].dt.month.notnull() & data[date_column].dt.day.notnull())
+#     print("hello4")
+    
+#     data = data[not_null_mask]
+#     print("hello5")
+    
+#     return data
+
+def convert_and_filter_dates(X):
+    X = pd.to_datetime(X, errors="coerce")
+    # Filter out NaT values along with ensuring month and day are not null
+    valid_dates_mask = X.notna() & X.dt.month.notnull() & X.dt.day.notnull()
+    filtered_dates = X[valid_dates_mask]
+    print(filtered_dates)
+    return filtered_dates
+
 
 def release_date(X):
     X = pd.to_datetime(X, errors="coerce")
@@ -154,12 +192,17 @@ def is_remix_or_collab_name(X, feature_names):
 
 
 def get_is_weekend(X):
+    X = X.dropna()
     X = pd.to_datetime(X, errors="coerce")
     return X.dt.dayofweek.isin([5, 6]).astype(int).values.reshape(-1, 1)
 
 
 def is_weekend_name(X, feature_names):
     return ["is_weekend"]
+
+def drop_release_date_column(X):
+    return X.drop(columns=['track_album_release_date'])
+
 
 
 # num_playlist_pipeline = make_pipeline(
@@ -178,18 +221,47 @@ release_date_pipeline = make_pipeline(
     OneHotEncoder(handle_unknown="ignore"),
 )
 
+
+
+
 num_pipeline = make_pipeline(
     StandardScaler(),
 )
 
+# date_transformer = make_pipeline(
+#     FunctionTransformer(lambda X: filter_null_dates(convert_to_datetime(X, date_column="track_album_release_date")), validate=False)
+# )
+
+date_transformer = FunctionTransformer(
+    lambda X: convert_and_filter_dates(X).values.reshape(-1, 1),
+    validate=False
+    #kw_args={"date_column": "track_album_release_date"}
+)
+
+
+# feature_engineering = ColumnTransformer(
+#     [
+#         ("date", date_transformer, "track_album_release_date"),
+#         ("release_date", release_date_pipeline, "track_album_release_date"),
+#         ("release_day", FunctionTransformer(get_is_weekend, validate=False, feature_names_out=is_weekend_name), "track_album_release_date"),
+#         ("top_artist", TopArtistTransformer(num_top_artists=50), ["track_artist", "track_album_release_date", "track_id"]),
+      
+
+
 
 feature_engineering = ColumnTransformer(
-    [
-        # (
-        #     "num_playlists",
-        #     num_playlist_pipeline,
-        #     ["track_id", "playlist_id"],
-        # ),
+        [
+            # (
+            #     "num_playlists",
+            #     num_playlist_pipeline,
+            #     ["track_id", "playlist_id"],
+            # ),
+            ("date",
+            date_transformer,
+            "track_album_release_date"
+            ),
+
+        
         (
             "release_date",
             release_date_pipeline,
@@ -251,13 +323,18 @@ feature_engineering = ColumnTransformer(
     remainder="drop",
 )
 
+print(X_train.columns)
 
-feature_engineering.fit(X_train)
-with open("./src/features/feature_engineering.pkl", "wb") as f:
-    pickle.dump(feature_engineering, f)
+final_pipeline = make_pipeline(
+    feature_engineering,
+    FunctionTransformer(drop_release_date_column, validate=False)
+)
 
-with open("./src/features/train_test_data.pkl", "wb") as f:
-    pickle.dump((X_train, X_test, y_train, y_test), f)
+
+final_pipeline.fit(X_train)
+with open("./src/features/preprocessing.pkl", "wb") as f:
+    pickle.dump(final_pipeline, f)
+
 
 
 # ### Unit Test
@@ -303,6 +380,13 @@ class TestTopArtistTransformer(unittest.TestCase):
 
 suite = unittest.TestLoader().loadTestsFromTestCase(TestTopArtistTransformer)
 unittest.TextTestRunner().run(suite)
+
+
+
+
+
+
+
 
 
 ## Causal Infernece Pipeline
