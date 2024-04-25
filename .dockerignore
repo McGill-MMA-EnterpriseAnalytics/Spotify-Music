@@ -4,5 +4,5 @@
 build/
 # Ignore a specific file
 .env
-.venv/
+.venv
 lighting_logs/
