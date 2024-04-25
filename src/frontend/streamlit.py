@@ -1,39 +1,9 @@
 import streamlit as st
+import requests
+
 import pandas as pd
-import joblib
-import os
-import sys
-import torch
-import torch.nn as nn
 
-sys.path.append("src\\features")
-
-from build_features import (
-    TopArtistTransformer,
-    ReleaseDateTransformer,
-    RemixOrCollabTransformer,
-    WeekendTransformer,
-    CausalInferenceTransformer,
-)
-
-from classifier import ClassificationModel
-
-# Load the preprocessing pipeline
-preprocessing_pipeline = joblib.load("./src/features/preprocessing.joblib")
-causal_inference_pipeline = joblib.load(
-    "./src/features/causal_inference_pipeline.joblib"
-)
-
-# Load the trained models
-xgb_model = joblib.load("./models/xgb_optuna_model.joblib")
-dl_model = joblib.load("./models/deep_learning_optuna_model.joblib")
-
-
-def predict_dl(model, data):
-    model.eval()
-    with torch.no_grad():
-        preds = model(data)
-        return preds.argmax(dim=1).detach().cpu().numpy()
+BASE_URL = "https://insy695-zlcw5o425a-nn.a.run.app"
 
 
 def convert_to_label(predicition):
@@ -61,28 +31,42 @@ def main():
         st.write("Uploaded data:")
         st.write(data)
 
-        # Preprocess data
-        preprocessed_data = preprocessing_pipeline.transform(data)
+        # Convert data to JSON for prediction
+        json_data = data.to_json(orient="records")
 
-        # Make predictions
-        xgb_predictions = xgb_model.predict(preprocessed_data)
-        dl_predictions = predict_dl(dl_model, torch.tensor(preprocessed_data).float())
+        # Define the URLs of the FastAPI endpoints
+        xgb_prediction_url = f"{BASE_URL}/xgb"
+        dl_prediction_url = f"{BASE_URL}/dl"
 
-        # Combine predictions with original data
-        data["xgb_predictions"] = xgb_predictions
-        data["dl_predictions"] = dl_predictions
+        # Send the data to the XGB FastAPI endpoint for prediction
+        headers = {"Content-Type": "application/json"}
+        xgb_response = requests.post(
+            xgb_prediction_url, data=json_data, headers=headers
+        )
 
-        data["xgb_label"] = [convert_to_label(pred) for pred in xgb_predictions]
-        data['dl_label'] = [convert_to_label(pred) for pred in dl_predictions]
+        # Send the data to the DL FastAPI endpoint for prediction
+        dl_response = requests.post(dl_prediction_url, data=json_data, headers=headers)
 
-        # data["causal_features"] = causal_preprocessed_data.to_dict("records")
+        if xgb_response.status_code == 200 and dl_response.status_code == 200:
+            xgb_predictions = xgb_response.json()["predictions"]
+            dl_predictions = dl_response.json()["predictions"]
 
-        # Display predictions
-        st.write("Predictions:")
-        st.write(data)
-        st.header("Top 5 high popularity songs")
-        top_songs = data.sort_values(by="dl_predictions", ascending=False).head(5)
-        st.write(top_songs)
+            # Combine predictions with original data
+            data["xgb_predictions"] = xgb_predictions
+            data["dl_predictions"] = dl_predictions
+
+            data["xgb_label"] = [convert_to_label(pred) for pred in xgb_predictions]
+            data["dl_label"] = [convert_to_label(pred) for pred in dl_predictions]
+
+            # Display predictions
+            st.write("Predictions:")
+            st.write(data)
+            st.header("Top 5 high popularity songs")
+            top_songs = data.sort_values(by="dl_predictions", ascending=False).head(5)
+            st.write(top_songs)
+        else:
+            st.error("Failed to get predictions from the models.")
+
 
 if __name__ == "__main__":
     main()
