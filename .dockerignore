@@ -1,0 +1,8 @@
+# Ignore all log files
+*.log
+# Ignore the build directory and all its contents 
+build/
+# Ignore a specific file
+.env
+.venv/
+lighting_logs/
