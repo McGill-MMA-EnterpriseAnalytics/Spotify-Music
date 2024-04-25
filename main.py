@@ -22,7 +22,6 @@ class SampleRequest(BaseModel):
     track_id: str
     track_name: str
     track_artist: str
-    track_popularity: int
     track_album_id: str
     track_album_name: str
     track_album_release_date: str
