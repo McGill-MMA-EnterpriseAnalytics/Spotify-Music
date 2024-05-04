@@ -1,0 +1,19 @@
+insy695
+steps:
+# Build the Docker image
+- name: 'gcr.io/cloud-builders/docker'
+  args: ['build', '-t', 'gcr.io/insy695/insy695', '.']
+
+# Run unit tests
+- name: 'gcr.io/insy695/insy695'
+  entrypoint: 'python'
+  args: ['-m', 'unittest', 'discover', '-s', 'tests']
+
+# Push the Docker image to Container Registry
+- name: 'gcr.io/cloud-builders/docker'
+  args: ['push', 'gcr.io/insy695/insy695']
+
+# Deploy to Cloud Run
+- name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+  entrypoint: 'gcloud'
+  args: ['run', 'deploy', 'insy695', '--image', 'gcr.io/insy695/insy695', '--region', 'us-central1', '--platform', 'managed']

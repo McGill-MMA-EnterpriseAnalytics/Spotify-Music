@@ -1,7 +1,0 @@
-activation: elu
-dropout_rate: 0.31492464227456085
-hidden_size: 64
-input_size: 54
-lr: 0.0031339523678987715
-num_classes: 4
-num_hidden_layers: 3

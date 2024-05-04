@@ -18,9 +18,9 @@ if __name__ == "__main__":
     data = pd.read_csv("data/raw/spotify_songs_train.csv")
 
     logger.info("Loading pipelines...")
-    train_test_data = joblib.load("data/interim/train_test_data.joblib")
-    preprocessing = joblib.load("src/features/preprocessing.joblib")
-    causal_inference = joblib.load("src/features/causal_inference_pipeline.joblib")
+    train_test_data = joblib.load("./data/interim/train_test_data.joblib")
+    preprocessing = joblib.load("./src/features/preprocessing.joblib")
+    causal_inference = joblib.load("./src/features/causal_inference_pipeline.joblib")
 
     X_train, X_test, y_train, y_test = train_test_data
 

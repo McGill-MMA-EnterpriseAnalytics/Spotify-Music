@@ -1,5 +1,4 @@
 import json
-
 import joblib
 import pandas as pd
 import torch
@@ -7,7 +6,6 @@ import uvicorn
 from fastapi import FastAPI, Request
 from pydantic import BaseModel
 from torch.nn import functional as F
-
 from src.features.build_features import (
     CausalInferenceTransformer,
     ReleaseDateTransformer,

@@ -9,14 +9,8 @@ import optuna
 import joblib  # Import joblib for saving the model
 
 
-
-
 # training xgboost model and perform hyperparameter tuning using optuna
 
-
-X_train_transformed, X_test_transformed, y_train, y_test = joblib.load(
-    "./data/processed/train_test_transformed_data.joblib"
-)
 
 
 def objective(trial):
@@ -48,8 +42,10 @@ def objective(trial):
             param["normalize_type"] = trial.suggest_categorical(
                 "normalize_type", ["tree", "forest"]
             )
-            param["rate_drop"] = trial.suggest_float("rate_drop", 1e-8, 1.0, log=True)
-            param["skip_drop"] = trial.suggest_float("skip_drop", 1e-8, 1.0, log=True)
+            param["rate_drop"] = trial.suggest_float(
+                "rate_drop", 1e-8, 1.0, log=True)
+            param["skip_drop"] = trial.suggest_float(
+                "skip_drop", 1e-8, 1.0, log=True)
 
         mlflow.log_params(param)
 
@@ -66,3 +62,22 @@ def objective(trial):
         accuracy = accuracy_score(y_test, pred_labels)
         mlflow.log_metric("accuracy", accuracy)
         return accuracy
+
+
+if __name__ == "__main__":
+    # Load dataset
+    X_train_transformed, X_test_transformed, y_train, y_test = joblib.load(
+    "./data/processed/train_test_transformed_data.joblib")
+
+    study = optuna.create_study(direction="maximize")
+    study.optimize(objective, n_trials=100)
+
+    best_params = study.best_trial.params
+    print("Best trial:", study.best_trial.params)
+
+    # Train final model with adjusted labels
+    final_model = xgb.XGBClassifier(**best_params)
+    final_model.fit(X_train_transformed, y_train)
+
+    # Save the model
+    joblib.dump(final_model, "./models/xgb_optuna_model.joblib")
