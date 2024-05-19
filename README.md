@@ -39,6 +39,10 @@ We aim to uncover patterns and relationships that drive song popularity to empo
 
 The results show a statistically significant negative causal relationship between the duration of a song and its popularity that increases with time.
 
+Project Architecture
+--------
+![Project Architecture](./reports/architecture_diagram.png)
+
 Project Organization
 ------------
 

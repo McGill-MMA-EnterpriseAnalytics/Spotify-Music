@@ -1,3 +1,6 @@
+# Pytorch Lightning
+lightning_logs/
+
 # MLflow
 mlruns/
 mlartifacts/
