@@ -1,5 +1,4 @@
 import os
-
 import joblib  # Import joblib for saving the model
 import numpy as np
 import optuna
@@ -62,6 +61,28 @@ def get_activation_fn(activation):
         raise ValueError(f"Invalid activation function: {activation}")
 
 
+def objective(trial):
+    lr = trial.suggest_float("lr", 1e-4, 1e-2, log=True)
+    hidden_size = trial.suggest_int("hidden_size", 32, 256, step=16)
+    num_hidden_layers = trial.suggest_int("num_hidden_layers", 1, 3)
+    dropout_rate = trial.suggest_float("dropout_rate", 0.1, 0.5)
+    activation = trial.suggest_categorical(
+        "activation", ["relu", "leaky_relu", "elu"])
+
+    model = ClassificationModel(input_size=X_train_transformed.shape[1], num_classes=len(np.unique(y_train)),
+                                hidden_size=hidden_size, num_hidden_layers=num_hidden_layers,
+                                dropout_rate=dropout_rate, activation=activation, lr=lr)
+
+    early_stop_callback = EarlyStopping(
+        monitor="val_loss", patience=5, verbose=True, mode="min")
+    trainer = pl.Trainer(max_epochs=100, callbacks=[
+                         early_stop_callback], accelerator="cuda" if torch.cuda.is_available() else "auto")
+
+    trainer.fit(model, train_loader, val_loader)
+
+    return trainer.callback_metrics["val_loss"].item()
+
+
 if __name__ == "__main__":
     # Load your data
     X_train_transformed, X_test_transformed, y_train, y_test = joblib.load(
@@ -82,27 +103,6 @@ if __name__ == "__main__":
     train_loader = DataLoader(
         train_dataset, batch_size=batch_size, shuffle=True)
     val_loader = DataLoader(val_dataset, batch_size=batch_size)
-
-    def objective(trial):
-        lr = trial.suggest_float("lr", 1e-4, 1e-2, log=True)
-        hidden_size = trial.suggest_int("hidden_size", 32, 256, step=16)
-        num_hidden_layers = trial.suggest_int("num_hidden_layers", 1, 3)
-        dropout_rate = trial.suggest_float("dropout_rate", 0.1, 0.5)
-        activation = trial.suggest_categorical(
-            "activation", ["relu", "leaky_relu", "elu"])
-
-        model = ClassificationModel(input_size=X_train_transformed.shape[1], num_classes=len(np.unique(y_train)),
-                                    hidden_size=hidden_size, num_hidden_layers=num_hidden_layers,
-                                    dropout_rate=dropout_rate, activation=activation, lr=lr)
-
-        early_stop_callback = EarlyStopping(
-            monitor="val_loss", patience=5, verbose=True, mode="min")
-        trainer = pl.Trainer(max_epochs=100, callbacks=[
-                             early_stop_callback], accelerator="cuda" if torch.cuda.is_available() else "auto")
-
-        trainer.fit(model, train_loader, val_loader)
-
-        return trainer.callback_metrics["val_loss"].item()
 
     study = optuna.create_study(direction="minimize")
     study.optimize(objective, n_trials=20)

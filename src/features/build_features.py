@@ -345,7 +345,7 @@ if __name__ == "__main__":
     logger.info("Running train-test split...")
 
     # Load your data
-    data = pd.read_csv("./data/raw/spotify_songs_train.csv")
+    data = pd.read_csv("data/raw/spotify_songs_train.csv")
 
     # Split the data into train and test sets
     X_train, X_test, y_train, y_test = prepare_data(data)
@@ -354,14 +354,14 @@ if __name__ == "__main__":
     logger.info(f"Columns: {X_train.columns}")
 
     # Save the train and test data as a joblib file
-    with open("./src/features/train_test_data.joblib", "wb") as f:
+    with open("data/interim/train_test_data.joblib", "wb") as f:
         joblib.dump((X_train, X_test, y_train, y_test), f)
 
     logger.info("Train-test executed completed successfully")
 
     final_pipeline.fit(X_train)
 
-    with open("./src/features/preprocessing.joblib", "wb") as f:
+    with open("src/features/preprocessing.joblib", "wb") as f:
         joblib.dump(final_pipeline, f)
 
     logger.info("Preprocessing pipeline saved successfully")
@@ -370,5 +370,5 @@ if __name__ == "__main__":
         CausalInferenceTransformer(),
     )
 
-    with open("./src/features/causal_inference_pipeline.joblib", "wb") as file:
+    with open("src/features/causal_inference_pipeline.joblib", "wb") as file:
         joblib.dump(causal_inference_pipeline, file)

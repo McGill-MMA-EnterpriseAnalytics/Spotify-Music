@@ -1,8 +1,9 @@
-# -*- coding: utf-8 -*-
 import click
 import logging
 from pathlib import Path
 from dotenv import find_dotenv, load_dotenv
+import pandas as pd
+import joblib
 
 
 @click.command()
@@ -15,6 +16,20 @@ def main(input_filepath, output_filepath):
     logger = logging.getLogger(__name__)
     logger.info('making final data set from raw data')
 
+    # Load the data
+    data = pd.read_csv(input_filepath)
+
+    # Load the pipelines
+    preprocessing = joblib.load("./src/features/preprocessing.joblib")
+
+    # Apply the transformations
+    X_transformed = pd.DataFrame(
+        preprocessing.transform(data), columns=preprocessing.get_feature_names_out()
+    )
+
+    # Save the transformed data
+    with open(output_filepath, "wb") as f:
+        joblib.dump(X_transformed, f)
 
 if __name__ == '__main__':
     log_fmt = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
